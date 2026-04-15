@@ -1,0 +1,1 @@
+/usr/lib/ccache/c++ -O3 -DNDEBUG -rdynamic CMakeFiles/test_basics.dir/test_basics.cpp.o -o /home/zhiyuan/moveit/devel/lib/geometric_shapes/test_basics   -L/usr/local/lib  -L/home/zhiyuan/moveit/build/gtest  -Wl,-rpath,/usr/local/lib:/home/zhiyuan/moveit/build/gtest:/home/zhiyuan/moveit/build/gtest/lib ../../gtest/lib/libgtest.so -lpthread 
