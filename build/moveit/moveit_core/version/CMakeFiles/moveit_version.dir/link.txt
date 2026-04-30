@@ -1,1 +1,0 @@
-/usr/lib/ccache/c++ -O3 -DNDEBUG -rdynamic CMakeFiles/moveit_version.dir/version.cpp.o -o /home/zhiyuan/moveit/devel/lib/moveit_core/moveit_version   -L/usr/local/lib 
