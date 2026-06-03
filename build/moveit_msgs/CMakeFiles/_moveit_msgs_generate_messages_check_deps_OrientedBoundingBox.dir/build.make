@@ -67,7 +67,7 @@ include moveit_msgs/CMakeFiles/_moveit_msgs_generate_messages_check_deps_Oriente
 include moveit_msgs/CMakeFiles/_moveit_msgs_generate_messages_check_deps_OrientedBoundingBox.dir/progress.make
 
 moveit_msgs/CMakeFiles/_moveit_msgs_generate_messages_check_deps_OrientedBoundingBox:
-	cd /home/zhiyuan/moveit/build/moveit_msgs && ../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genmsg/cmake/../../../lib/genmsg/genmsg_check_deps.py moveit_msgs /home/zhiyuan/moveit/src/moveit_msgs/msg/OrientedBoundingBox.msg geometry_msgs/Quaternion:geometry_msgs/Point32:geometry_msgs/Pose:geometry_msgs/Point
+	cd /home/zhiyuan/moveit/build/moveit_msgs && ../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genmsg/cmake/../../../lib/genmsg/genmsg_check_deps.py moveit_msgs /home/zhiyuan/moveit/src/moveit_msgs/msg/OrientedBoundingBox.msg geometry_msgs/Point32:geometry_msgs/Pose:geometry_msgs/Point:geometry_msgs/Quaternion
 
 _moveit_msgs_generate_messages_check_deps_OrientedBoundingBox: moveit_msgs/CMakeFiles/_moveit_msgs_generate_messages_check_deps_OrientedBoundingBox
 _moveit_msgs_generate_messages_check_deps_OrientedBoundingBox: moveit_msgs/CMakeFiles/_moveit_msgs_generate_messages_check_deps_OrientedBoundingBox.dir/build.make

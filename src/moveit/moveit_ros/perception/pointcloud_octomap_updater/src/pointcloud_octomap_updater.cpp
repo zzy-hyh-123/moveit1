@@ -1,38 +1,3 @@
-/*********************************************************************
- * Software License Agreement (BSD License)
- *
- *  Copyright (c) 2011, Willow Garage, Inc.
- *  All rights reserved.
- *
- *  Redistribution and use in source and binary forms, with or without
- *  modification, are permitted provided that the following conditions
- *  are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above
- *     copyright notice, this list of conditions and the following
- *     disclaimer in the documentation and/or other materials provided
- *     with the distribution.
- *   * Neither the name of Willow Garage nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- *  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- *  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- *  FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- *  COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- *  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- *  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- *  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- *  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- *  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- *  POSSIBILITY OF SUCH DAMAGE.
- *********************************************************************/
-
-/* Author: Jon Binney, Ioan Sucan */
 
 #include <cmath>
 #include <moveit/pointcloud_octomap_updater/pointcloud_octomap_updater.h>
@@ -48,6 +13,11 @@
 namespace occupancy_map_monitor
 {
 static const std::string LOGNAME = "occupancy_map_monitor";
+
+std::unordered_set<octomap::OcTreeKey, octomap::OcTreeKey::KeyHash> PointCloudOctomapUpdater::global_locked_cells_;
+octomap::KeySet PointCloudOctomapUpdater::last_frame_local_cells_;
+std::mutex PointCloudOctomapUpdater::map_mutex_;
+
 PointCloudOctomapUpdater::PointCloudOctomapUpdater()
   : OccupancyMapUpdater("PointCloudUpdater")
   , private_nh_("~")
@@ -286,10 +256,11 @@ void PointCloudOctomapUpdater::cloudMsgCallback(const sensor_msgs::PointCloud2::
           }
           else if (mask_[row_c + col] == point_containment_filter::ShapeMask::CLIP)
           {
-            tf2::Vector3 clipped_point_tf =
-                map_h_sensor * (tf2::Vector3(pt_iter[0], pt_iter[1], pt_iter[2]).normalize() * max_range_);
-            clip_cells.insert(
-                tree_->coordToKey(clipped_point_tf.getX(), clipped_point_tf.getY(), clipped_point_tf.getZ()));
+            continue;
+            // tf2::Vector3 clipped_point_tf =
+            //     map_h_sensor * (tf2::Vector3(pt_iter[0], pt_iter[1], pt_iter[2]).normalize() * max_range_);
+            // clip_cells.insert(
+            //     tree_->coordToKey(clipped_point_tf.getX(), clipped_point_tf.getY(), clipped_point_tf.getZ()));
           }
           else
           {
@@ -312,19 +283,19 @@ void PointCloudOctomapUpdater::cloudMsgCallback(const sensor_msgs::PointCloud2::
     }
 
     /* compute the free cells along each ray that ends at an occupied cell */
-    for (const octomap::OcTreeKey& occupied_cell : occupied_cells)
-      if (tree_->computeRayKeys(sensor_origin, tree_->keyToCoord(occupied_cell), key_ray_))
-        free_cells.insert(key_ray_.begin(), key_ray_.end());
+    // for (const octomap::OcTreeKey& occupied_cell : occupied_cells)
+    //   if (tree_->computeRayKeys(sensor_origin, tree_->keyToCoord(occupied_cell), key_ray_))
+    //     free_cells.insert(key_ray_.begin(), key_ray_.end());
 
-    /* compute the free cells along each ray that ends at a model cell */
-    for (const octomap::OcTreeKey& model_cell : model_cells)
-      if (tree_->computeRayKeys(sensor_origin, tree_->keyToCoord(model_cell), key_ray_))
-        free_cells.insert(key_ray_.begin(), key_ray_.end());
+    // /* compute the free cells along each ray that ends at a model cell */
+    // for (const octomap::OcTreeKey& model_cell : model_cells)
+    //   if (tree_->computeRayKeys(sensor_origin, tree_->keyToCoord(model_cell), key_ray_))
+    //     free_cells.insert(key_ray_.begin(), key_ray_.end());
 
-    /* compute the free cells along each ray that ends at a clipped cell */
-    for (const octomap::OcTreeKey& clip_cell : clip_cells)
-      if (tree_->computeRayKeys(sensor_origin, tree_->keyToCoord(clip_cell), key_ray_))
-        free_cells.insert(key_ray_.begin(), key_ray_.end());
+    // /* compute the free cells along each ray that ends at a clipped cell */
+    // for (const octomap::OcTreeKey& clip_cell : clip_cells)
+    //   if (tree_->computeRayKeys(sensor_origin, tree_->keyToCoord(clip_cell), key_ray_))
+    //     free_cells.insert(key_ray_.begin(), key_ray_.end());
   }
   catch (...)
   {
@@ -342,31 +313,105 @@ void PointCloudOctomapUpdater::cloudMsgCallback(const sensor_msgs::PointCloud2::
   for (const octomap::OcTreeKey& occupied_cell : occupied_cells)
     free_cells.erase(occupied_cell);
 
-  tree_->lockWrite();
 
+  tree_->lockWrite();
   try
   {
-    /* mark free cells only if not seen occupied in this cloud */
-    for (const octomap::OcTreeKey& free_cell : free_cells)
-      tree_->updateNode(free_cell, false);
+    std::lock_guard<std::mutex> lock(map_mutex_);
 
-    /* now mark all occupied cells */
-    for (const octomap::OcTreeKey& occupied_cell : occupied_cells)
-      tree_->updateNode(occupied_cell, true);
+    if (ns_ == "global")
+    {
+      // ==============================================
+      // 全局插件逻辑：完全替换全局地图
+      // ==============================================
+      ROS_INFO_NAMED(LOGNAME, "Global map update triggered - resetting map...");
 
-    // set the logodds to the minimum for the cells that are part of the model
-    const float lg = tree_->getClampingThresMinLog() - tree_->getClampingThresMaxLog();
-    for (const octomap::OcTreeKey& model_cell : model_cells)
-      tree_->updateNode(model_cell, lg);
+      // 第一步：清除所有旧的全局体素
+      for (const octomap::OcTreeKey& key : global_locked_cells_)
+      {
+        tree_->updateNode(key, false);
+      }
+      global_locked_cells_.clear();
+
+      // 第二步：用当前点云生成全新的全局地图
+      // 只处理当前帧，不考虑任何历史信息
+      for (const octomap::OcTreeKey& free_cell : free_cells)
+      {
+        tree_->updateNode(free_cell, false);
+      }
+
+      for (const octomap::OcTreeKey& occupied_cell : occupied_cells)
+      {
+        tree_->updateNode(occupied_cell, true);
+        // 关键：锁定所有全局占用体素
+        global_locked_cells_.insert(occupied_cell);
+      }
+
+      // 第三步：机械臂自身区域设为安全
+      const float lg = tree_->getClampingThresMinLog() - tree_->getClampingThresMaxLog();
+      for (const octomap::OcTreeKey& model_cell : model_cells)
+      {
+        tree_->updateNode(model_cell, lg);
+      }
+
+      ROS_INFO_NAMED(LOGNAME, "Global map reset complete. Locked %zu static obstacle voxels.", global_locked_cells_.size());
+    }
+    else
+    {
+      // ==============================================
+      // 局部插件逻辑：每帧完全替换，不影响全局
+      // ==============================================
+      // 第一步：清除上一帧的所有局部体素（跳过全局锁定的）
+      for (const octomap::OcTreeKey& key : last_frame_local_cells_)
+      {
+        if (global_locked_cells_.count(key) > 0)
+          continue;
+        
+        tree_->updateNode(key, false);
+      }
+      last_frame_local_cells_.clear();
+
+      // 第二步：用当前帧生成全新的局部地图
+      // 只处理当前帧，不考虑任何历史信息
+      for (const octomap::OcTreeKey& free_cell : free_cells)
+      {
+        if (global_locked_cells_.count(free_cell) > 0)
+          continue;
+        
+        tree_->updateNode(free_cell, false);
+        last_frame_local_cells_.insert(free_cell);
+      }
+
+      for (const octomap::OcTreeKey& occupied_cell : occupied_cells)
+      {
+        if (global_locked_cells_.count(occupied_cell) > 0)
+          continue;
+        
+        tree_->updateNode(occupied_cell, true);
+        last_frame_local_cells_.insert(occupied_cell);
+      }
+
+      // 第三步：机械臂自身区域设为安全
+      const float lg = tree_->getClampingThresMinLog() - tree_->getClampingThresMaxLog();
+      for (const octomap::OcTreeKey& model_cell : model_cells)
+      {
+        if (global_locked_cells_.count(model_cell) > 0)
+          continue;
+        
+        tree_->updateNode(model_cell, lg);
+        last_frame_local_cells_.insert(model_cell);
+      }
+    }
   }
   catch (...)
   {
     ROS_ERROR_NAMED(LOGNAME, "Internal error while updating octree");
   }
   tree_->unlockWrite();
+
   ROS_DEBUG_NAMED(LOGNAME, "Processed point cloud in %lf ms", (ros::WallTime::now() - start).toSec() * 1000.0);
   tree_->triggerUpdateCallback();
-
+  
   if (filtered_cloud)
   {
     sensor_msgs::PointCloud2Modifier pcd_modifier(*filtered_cloud);

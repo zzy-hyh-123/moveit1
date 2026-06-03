@@ -424,7 +424,7 @@ PlanningSceneMonitorDynamicReconfigureConfig::GroupDescription<PlanningSceneMoni
 //#line 292 "/opt/ros/noetic/lib/python3/dist-packages/dynamic_reconfigure/parameter_generator_catkin.py"
       __max__.publish_planning_scene_hz = 100.0;
 //#line 292 "/opt/ros/noetic/lib/python3/dist-packages/dynamic_reconfigure/parameter_generator_catkin.py"
-      __default__.publish_planning_scene_hz = 4.0;
+      __default__.publish_planning_scene_hz = 20.0;
 //#line 292 "/opt/ros/noetic/lib/python3/dist-packages/dynamic_reconfigure/parameter_generator_catkin.py"
       Default.abstract_parameters.push_back(PlanningSceneMonitorDynamicReconfigureConfig::AbstractParamDescriptionConstPtr(new PlanningSceneMonitorDynamicReconfigureConfig::ParamDescription<double>("publish_planning_scene_hz", "double", 2, "Set the maximum frequency at which planning scene updates are published", "", &PlanningSceneMonitorDynamicReconfigureConfig::publish_planning_scene_hz)));
 //#line 292 "/opt/ros/noetic/lib/python3/dist-packages/dynamic_reconfigure/parameter_generator_catkin.py"
