@@ -70,5 +70,8 @@ private:
   static std::unordered_set<octomap::OcTreeKey, octomap::OcTreeKey::KeyHash> global_locked_cells_;
   static octomap::KeySet last_frame_local_cells_;
   static std::mutex map_mutex_;
+
+  static std::deque<octomap::KeySet> point_cloud_window_;
+  static std::unordered_set<octomap::OcTreeKey, octomap::OcTreeKey::KeyHash> all_local_cells_;
 };
 }  // namespace occupancy_map_monitor

@@ -1,4 +1,3 @@
-
 #include <cmath>
 #include <moveit/pointcloud_octomap_updater/pointcloud_octomap_updater.h>
 #include <moveit/occupancy_map_monitor/occupancy_map_monitor.h>
@@ -13,9 +12,11 @@
 namespace occupancy_map_monitor
 {
 static const std::string LOGNAME = "occupancy_map_monitor";
+std::deque<octomap::KeySet> PointCloudOctomapUpdater::point_cloud_window_;
+const int WINDOW_SIZE = 1; // 滑动窗口大小：1帧（0.2秒，10Hz雷达）
 
 std::unordered_set<octomap::OcTreeKey, octomap::OcTreeKey::KeyHash> PointCloudOctomapUpdater::global_locked_cells_;
-octomap::KeySet PointCloudOctomapUpdater::last_frame_local_cells_;
+std::unordered_set<octomap::OcTreeKey, octomap::OcTreeKey::KeyHash> PointCloudOctomapUpdater::all_local_cells_;
 std::mutex PointCloudOctomapUpdater::map_mutex_;
 
 PointCloudOctomapUpdater::PointCloudOctomapUpdater()
@@ -155,7 +156,6 @@ void PointCloudOctomapUpdater::cloudMsgCallback(const sensor_msgs::PointCloud2::
 
   if (max_update_rate_ > 0)
   {
-    // ensure we are not updating the octomap representation too often
     if (ros::Time::now() - last_update_time_ <= ros::Duration(1.0 / max_update_rate_))
       return;
     last_update_time_ = ros::Time::now();
@@ -174,9 +174,12 @@ void PointCloudOctomapUpdater::cloudMsgCallback(const sensor_msgs::PointCloud2::
     {
       try
       {
-        tf2::fromMsg(tf_buffer_->lookupTransform(monitor_->getMapFrame(), cloud_msg->header.frame_id,
-                                                 cloud_msg->header.stamp),
-                     map_h_sensor);
+        tf2::fromMsg(tf_buffer_->lookupTransform(
+          monitor_->getMapFrame(), 
+          cloud_msg->header.frame_id,
+          cloud_msg->header.stamp,
+          ros::Duration(0.2) // 增加TF缓存到0.2秒，确保能找到结束时刻的TF
+        ), map_h_sensor);
       }
       catch (tf2::TransformException& ex)
       {
@@ -197,15 +200,113 @@ void PointCloudOctomapUpdater::cloudMsgCallback(const sensor_msgs::PointCloud2::
     return;
 
   /* mask out points on the robot */
-  shape_mask_->maskContainment(*cloud_msg, sensor_origin_eigen, 0.0, max_range_, mask_);
+  // ✅ 双位姿自过滤：覆盖整个0.1秒点云采集时间（专门针对0.5m/s速度优化）
+  std::vector<int> mask_start, mask_mid, mask_end;
+
+  // 第一步：点云开始时刻（第0度）
+  shape_mask_->maskContainment(
+    *cloud_msg, 
+    sensor_origin_eigen, 
+    0.0, 
+    max_range_, 
+    mask_start
+  );
+
+  // 第二步：点云中间时刻（第180度）
+  mask_mid = mask_start;
+  try
+  {
+    ros::Time mid_time = cloud_msg->header.stamp + ros::Duration(0.05);
+    
+    tf2::Stamped<tf2::Transform> map_h_sensor_mid;
+    tf2::fromMsg(tf_buffer_->lookupTransform(
+      monitor_->getMapFrame(), 
+      cloud_msg->header.frame_id,
+      mid_time,
+      ros::Duration(0.2)
+    ), map_h_sensor_mid);
+    
+    const tf2::Vector3& sensor_origin_tf_mid = map_h_sensor_mid.getOrigin();
+    Eigen::Vector3d sensor_origin_eigen_mid(
+      sensor_origin_tf_mid.getX(), 
+      sensor_origin_tf_mid.getY(), 
+      sensor_origin_tf_mid.getZ()
+    );
+    
+    shape_mask_->maskContainment(
+      *cloud_msg, 
+      sensor_origin_eigen_mid, 
+      0.0, 
+      max_range_, 
+      mask_mid
+    );
+  }
+  catch (tf2::TransformException& ex)
+  {
+    ROS_WARN_STREAM_NAMED(LOGNAME, "Cannot find TF for mid time: " << ex.what());
+  }
+
+  // 第三步：点云结束时刻（第360度）
+  mask_end = mask_start;
+  try
+  {
+    ros::Time end_time = cloud_msg->header.stamp + ros::Duration(0.1);
+    
+    tf2::Stamped<tf2::Transform> map_h_sensor_end;
+    tf2::fromMsg(tf_buffer_->lookupTransform(
+      monitor_->getMapFrame(), 
+      cloud_msg->header.frame_id,
+      end_time,
+      ros::Duration(0.2)
+    ), map_h_sensor_end);
+    
+    const tf2::Vector3& sensor_origin_tf_end = map_h_sensor_end.getOrigin();
+    Eigen::Vector3d sensor_origin_eigen_end(
+      sensor_origin_tf_end.getX(), 
+      sensor_origin_tf_end.getY(), 
+      sensor_origin_tf_end.getZ()
+    );
+    
+    shape_mask_->maskContainment(
+      *cloud_msg, 
+      sensor_origin_eigen_end, 
+      0.0, 
+      max_range_, 
+      mask_end
+    );
+  }
+  catch (tf2::TransformException& ex)
+  {
+    ROS_WARN_STREAM_NAMED(LOGNAME, "Cannot find TF for end time: " << ex.what());
+  }
+
+  // 第四步：合并三个mask，只要任意一个时刻认为是机械臂，就过滤掉
+  mask_.resize(mask_start.size());
+  for (size_t i = 0; i < mask_start.size(); ++i)
+  {
+    if (mask_start[i] == point_containment_filter::ShapeMask::INSIDE || 
+        mask_mid[i] == point_containment_filter::ShapeMask::INSIDE || 
+        mask_end[i] == point_containment_filter::ShapeMask::INSIDE)
+    {
+      mask_[i] = point_containment_filter::ShapeMask::INSIDE;
+    }
+    else if (mask_start[i] == point_containment_filter::ShapeMask::CLIP || 
+            mask_mid[i] == point_containment_filter::ShapeMask::CLIP || 
+            mask_end[i] == point_containment_filter::ShapeMask::CLIP)
+    {
+      mask_[i] = point_containment_filter::ShapeMask::CLIP;
+    }
+    else
+    {
+      mask_[i] = point_containment_filter::ShapeMask::OUTSIDE;
+    }
+  }
+
   updateMask(*cloud_msg, sensor_origin_eigen, mask_);
 
-  octomap::KeySet free_cells, occupied_cells, model_cells, clip_cells;
+  octomap::KeySet current_occupied_cells, model_cells;
   std::unique_ptr<sensor_msgs::PointCloud2> filtered_cloud;
 
-  // We only use these iterators if we are creating a filtered_cloud for
-  // publishing. We cannot default construct these, so we use unique_ptr's
-  // to defer construction
   std::unique_ptr<sensor_msgs::PointCloud2Iterator<float>> iter_filtered_x;
   std::unique_ptr<sensor_msgs::PointCloud2Iterator<float>> iter_filtered_y;
   std::unique_ptr<sensor_msgs::PointCloud2Iterator<float>> iter_filtered_z;
@@ -218,7 +319,6 @@ void PointCloudOctomapUpdater::cloudMsgCallback(const sensor_msgs::PointCloud2::
     pcd_modifier.setPointCloud2FieldsByString(1, "xyz");
     pcd_modifier.resize(cloud_msg->width * cloud_msg->height);
 
-    // we have created a filtered_out, so we can create the iterators now
     iter_filtered_x = std::make_unique<sensor_msgs::PointCloud2Iterator<float>>(*filtered_cloud, "x");
     iter_filtered_y = std::make_unique<sensor_msgs::PointCloud2Iterator<float>>(*filtered_cloud, "y");
     iter_filtered_z = std::make_unique<sensor_msgs::PointCloud2Iterator<float>>(*filtered_cloud, "z");
@@ -229,44 +329,32 @@ void PointCloudOctomapUpdater::cloudMsgCallback(const sensor_msgs::PointCloud2::
 
   try
   {
-    /* do ray tracing to find which cells this point cloud indicates should be free, and which it indicates
-     * should be occupied */
     for (unsigned int row = 0; row < cloud_msg->height; row += point_subsample_)
     {
       unsigned int row_c = row * cloud_msg->width;
       sensor_msgs::PointCloud2ConstIterator<float> pt_iter(*cloud_msg, "x");
-      // set iterator to point at start of the current row
       pt_iter += row_c;
 
       for (unsigned int col = 0; col < cloud_msg->width; col += point_subsample_, pt_iter += point_subsample_)
       {
-        // if (mask_[row_c + col] == point_containment_filter::ShapeMask::CLIP)
-        //  continue;
-
-        /* check for NaN */
         if (!std::isnan(pt_iter[0]) && !std::isnan(pt_iter[1]) && !std::isnan(pt_iter[2]))
         {
-          /* occupied cell at ray endpoint if ray is shorter than max range and this point
-             isn't on a part of the robot*/
           if (mask_[row_c + col] == point_containment_filter::ShapeMask::INSIDE)
           {
-            // transform to map frame
+            // 落在膨胀后的碰撞模型内的点，标记为model_cells
             tf2::Vector3 point_tf = map_h_sensor * tf2::Vector3(pt_iter[0], pt_iter[1], pt_iter[2]);
             model_cells.insert(tree_->coordToKey(point_tf.getX(), point_tf.getY(), point_tf.getZ()));
           }
           else if (mask_[row_c + col] == point_containment_filter::ShapeMask::CLIP)
           {
             continue;
-            // tf2::Vector3 clipped_point_tf =
-            //     map_h_sensor * (tf2::Vector3(pt_iter[0], pt_iter[1], pt_iter[2]).normalize() * max_range_);
-            // clip_cells.insert(
-            //     tree_->coordToKey(clipped_point_tf.getX(), clipped_point_tf.getY(), clipped_point_tf.getZ()));
           }
           else
           {
+            // 只有不在碰撞模型内的点，才会被添加为障碍物
             tf2::Vector3 point_tf = map_h_sensor * tf2::Vector3(pt_iter[0], pt_iter[1], pt_iter[2]);
-            occupied_cells.insert(tree_->coordToKey(point_tf.getX(), point_tf.getY(), point_tf.getZ()));
-            // build list of valid points if we want to publish them
+            current_occupied_cells.insert(tree_->coordToKey(point_tf.getX(), point_tf.getY(), point_tf.getZ()));
+            
             if (filtered_cloud)
             {
               **iter_filtered_x = pt_iter[0];
@@ -281,21 +369,6 @@ void PointCloudOctomapUpdater::cloudMsgCallback(const sensor_msgs::PointCloud2::
         }
       }
     }
-
-    /* compute the free cells along each ray that ends at an occupied cell */
-    // for (const octomap::OcTreeKey& occupied_cell : occupied_cells)
-    //   if (tree_->computeRayKeys(sensor_origin, tree_->keyToCoord(occupied_cell), key_ray_))
-    //     free_cells.insert(key_ray_.begin(), key_ray_.end());
-
-    // /* compute the free cells along each ray that ends at a model cell */
-    // for (const octomap::OcTreeKey& model_cell : model_cells)
-    //   if (tree_->computeRayKeys(sensor_origin, tree_->keyToCoord(model_cell), key_ray_))
-    //     free_cells.insert(key_ray_.begin(), key_ray_.end());
-
-    // /* compute the free cells along each ray that ends at a clipped cell */
-    // for (const octomap::OcTreeKey& clip_cell : clip_cells)
-    //   if (tree_->computeRayKeys(sensor_origin, tree_->keyToCoord(clip_cell), key_ray_))
-    //     free_cells.insert(key_ray_.begin(), key_ray_.end());
   }
   catch (...)
   {
@@ -307,12 +380,23 @@ void PointCloudOctomapUpdater::cloudMsgCallback(const sensor_msgs::PointCloud2::
 
   /* cells that overlap with the model are not occupied */
   for (const octomap::OcTreeKey& model_cell : model_cells)
-    occupied_cells.erase(model_cell);
+    current_occupied_cells.erase(model_cell);
 
-  /* occupied cells are not free */
-  for (const octomap::OcTreeKey& occupied_cell : occupied_cells)
-    free_cells.erase(occupied_cell);
+  // ==============================================
+  // 核心：滑动窗口点云累积
+  // ==============================================
+  point_cloud_window_.push_back(current_occupied_cells);
+  if (point_cloud_window_.size() > WINDOW_SIZE)
+  {
+    point_cloud_window_.pop_front();
+  }
 
+  // 合并窗口内所有帧的点云
+  octomap::KeySet all_occupied_cells;
+  for (const auto& frame : point_cloud_window_)
+  {
+    all_occupied_cells.insert(frame.begin(), frame.end());
+  }
 
   tree_->lockWrite();
   try
@@ -322,28 +406,21 @@ void PointCloudOctomapUpdater::cloudMsgCallback(const sensor_msgs::PointCloud2::
     if (ns_ == "global")
     {
       // ==============================================
-      // 全局插件逻辑：完全替换全局地图
+      // 全局插件逻辑：完全保留
       // ==============================================
       ROS_INFO_NAMED(LOGNAME, "Global map update triggered - resetting map...");
 
       // 第一步：清除所有旧的全局体素
       for (const octomap::OcTreeKey& key : global_locked_cells_)
       {
-        tree_->updateNode(key, false);
+        tree_->setNodeValue(key, tree_->getClampingThresMinLog());
       }
       global_locked_cells_.clear();
 
       // 第二步：用当前点云生成全新的全局地图
-      // 只处理当前帧，不考虑任何历史信息
-      for (const octomap::OcTreeKey& free_cell : free_cells)
+      for (const octomap::OcTreeKey& occupied_cell : all_occupied_cells)
       {
-        tree_->updateNode(free_cell, false);
-      }
-
-      for (const octomap::OcTreeKey& occupied_cell : occupied_cells)
-      {
-        tree_->updateNode(occupied_cell, true);
-        // 关键：锁定所有全局占用体素
+        tree_->setNodeValue(occupied_cell, tree_->getClampingThresMaxLog());
         global_locked_cells_.insert(occupied_cell);
       }
 
@@ -351,7 +428,7 @@ void PointCloudOctomapUpdater::cloudMsgCallback(const sensor_msgs::PointCloud2::
       const float lg = tree_->getClampingThresMinLog() - tree_->getClampingThresMaxLog();
       for (const octomap::OcTreeKey& model_cell : model_cells)
       {
-        tree_->updateNode(model_cell, lg);
+        tree_->setNodeValue(model_cell, lg);
       }
 
       ROS_INFO_NAMED(LOGNAME, "Global map reset complete. Locked %zu static obstacle voxels.", global_locked_cells_.size());
@@ -359,47 +436,43 @@ void PointCloudOctomapUpdater::cloudMsgCallback(const sensor_msgs::PointCloud2::
     else
     {
       // ==============================================
-      // 局部插件逻辑：每帧完全替换，不影响全局
+      // 局部插件逻辑：体素白名单清除（解决蓝色残留）
       // ==============================================
-      // 第一步：清除上一帧的所有局部体素（跳过全局锁定的）
-      for (const octomap::OcTreeKey& key : last_frame_local_cells_)
+      // 只清除曾经在局部地图中出现过、但现在不在滑动窗口中的体素
+      std::unordered_set<octomap::OcTreeKey, octomap::OcTreeKey::KeyHash> cells_to_clear;
+      for (const octomap::OcTreeKey& key : all_local_cells_)
       {
-        if (global_locked_cells_.count(key) > 0)
-          continue;
-        
-        tree_->updateNode(key, false);
-      }
-      last_frame_local_cells_.clear();
-
-      // 第二步：用当前帧生成全新的局部地图
-      // 只处理当前帧，不考虑任何历史信息
-      for (const octomap::OcTreeKey& free_cell : free_cells)
-      {
-        if (global_locked_cells_.count(free_cell) > 0)
-          continue;
-        
-        tree_->updateNode(free_cell, false);
-        last_frame_local_cells_.insert(free_cell);
+        if (global_locked_cells_.count(key) == 0 && all_occupied_cells.count(key) == 0)
+        {
+          cells_to_clear.insert(key);
+        }
       }
 
-      for (const octomap::OcTreeKey& occupied_cell : occupied_cells)
+      // 清除不再需要的体素
+      for (const octomap::OcTreeKey& key : cells_to_clear)
+      {
+        tree_->setNodeValue(key, tree_->getClampingThresMinLog());
+        all_local_cells_.erase(key);
+      }
+
+      // 添加当前窗口的所有体素
+      for (const octomap::OcTreeKey& occupied_cell : all_occupied_cells)
       {
         if (global_locked_cells_.count(occupied_cell) > 0)
           continue;
         
-        tree_->updateNode(occupied_cell, true);
-        last_frame_local_cells_.insert(occupied_cell);
+        tree_->setNodeValue(occupied_cell, tree_->getClampingThresMaxLog());
+        all_local_cells_.insert(occupied_cell);
       }
 
-      // 第三步：机械臂自身区域设为安全
+      // 机械臂自身区域设为安全
       const float lg = tree_->getClampingThresMinLog() - tree_->getClampingThresMaxLog();
       for (const octomap::OcTreeKey& model_cell : model_cells)
       {
         if (global_locked_cells_.count(model_cell) > 0)
           continue;
         
-        tree_->updateNode(model_cell, lg);
-        last_frame_local_cells_.insert(model_cell);
+        tree_->setNodeValue(model_cell, lg);
       }
     }
   }
@@ -409,7 +482,10 @@ void PointCloudOctomapUpdater::cloudMsgCallback(const sensor_msgs::PointCloud2::
   }
   tree_->unlockWrite();
 
-  ROS_DEBUG_NAMED(LOGNAME, "Processed point cloud in %lf ms", (ros::WallTime::now() - start).toSec() * 1000.0);
+  ROS_DEBUG_NAMED(LOGNAME, "Processed point cloud in %lf ms, window size: %zu, total cells: %zu", 
+                  (ros::WallTime::now() - start).toSec() * 1000.0, 
+                  point_cloud_window_.size(), 
+                  all_occupied_cells.size());
   tree_->triggerUpdateCallback();
   
   if (filtered_cloud)

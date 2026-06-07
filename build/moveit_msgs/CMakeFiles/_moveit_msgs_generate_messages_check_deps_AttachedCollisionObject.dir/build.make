@@ -67,7 +67,7 @@ include moveit_msgs/CMakeFiles/_moveit_msgs_generate_messages_check_deps_Attache
 include moveit_msgs/CMakeFiles/_moveit_msgs_generate_messages_check_deps_AttachedCollisionObject.dir/progress.make
 
 moveit_msgs/CMakeFiles/_moveit_msgs_generate_messages_check_deps_AttachedCollisionObject:
-	cd /home/zhiyuan/moveit/build/moveit_msgs && ../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genmsg/cmake/../../../lib/genmsg/genmsg_check_deps.py moveit_msgs /home/zhiyuan/moveit/src/moveit_msgs/msg/AttachedCollisionObject.msg moveit_msgs/CollisionObject:shape_msgs/SolidPrimitive:std_msgs/Header:shape_msgs/MeshTriangle:shape_msgs/Mesh:object_recognition_msgs/ObjectType:geometry_msgs/Quaternion:geometry_msgs/Pose:trajectory_msgs/JointTrajectory:geometry_msgs/Point:shape_msgs/Plane:trajectory_msgs/JointTrajectoryPoint
+	cd /home/zhiyuan/moveit/build/moveit_msgs && ../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genmsg/cmake/../../../lib/genmsg/genmsg_check_deps.py moveit_msgs /home/zhiyuan/moveit/src/moveit_msgs/msg/AttachedCollisionObject.msg geometry_msgs/Point:object_recognition_msgs/ObjectType:moveit_msgs/CollisionObject:trajectory_msgs/JointTrajectory:shape_msgs/SolidPrimitive:std_msgs/Header:trajectory_msgs/JointTrajectoryPoint:shape_msgs/MeshTriangle:shape_msgs/Plane:shape_msgs/Mesh:geometry_msgs/Quaternion:geometry_msgs/Pose
 
 _moveit_msgs_generate_messages_check_deps_AttachedCollisionObject: moveit_msgs/CMakeFiles/_moveit_msgs_generate_messages_check_deps_AttachedCollisionObject
 _moveit_msgs_generate_messages_check_deps_AttachedCollisionObject: moveit_msgs/CMakeFiles/_moveit_msgs_generate_messages_check_deps_AttachedCollisionObject.dir/build.make

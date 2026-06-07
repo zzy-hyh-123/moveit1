@@ -67,7 +67,7 @@ include moveit_msgs/CMakeFiles/_moveit_msgs_generate_messages_check_deps_Gripper
 include moveit_msgs/CMakeFiles/_moveit_msgs_generate_messages_check_deps_GripperTranslation.dir/progress.make
 
 moveit_msgs/CMakeFiles/_moveit_msgs_generate_messages_check_deps_GripperTranslation:
-	cd /home/zhiyuan/moveit/build/moveit_msgs && ../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genmsg/cmake/../../../lib/genmsg/genmsg_check_deps.py moveit_msgs /home/zhiyuan/moveit/src/moveit_msgs/msg/GripperTranslation.msg std_msgs/Header:geometry_msgs/Vector3:geometry_msgs/Vector3Stamped
+	cd /home/zhiyuan/moveit/build/moveit_msgs && ../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genmsg/cmake/../../../lib/genmsg/genmsg_check_deps.py moveit_msgs /home/zhiyuan/moveit/src/moveit_msgs/msg/GripperTranslation.msg geometry_msgs/Vector3:geometry_msgs/Vector3Stamped:std_msgs/Header
 
 _moveit_msgs_generate_messages_check_deps_GripperTranslation: moveit_msgs/CMakeFiles/_moveit_msgs_generate_messages_check_deps_GripperTranslation
 _moveit_msgs_generate_messages_check_deps_GripperTranslation: moveit_msgs/CMakeFiles/_moveit_msgs_generate_messages_check_deps_GripperTranslation.dir/build.make

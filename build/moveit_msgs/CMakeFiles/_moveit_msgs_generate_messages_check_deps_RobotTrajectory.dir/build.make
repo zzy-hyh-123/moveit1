@@ -67,7 +67,7 @@ include moveit_msgs/CMakeFiles/_moveit_msgs_generate_messages_check_deps_RobotTr
 include moveit_msgs/CMakeFiles/_moveit_msgs_generate_messages_check_deps_RobotTrajectory.dir/progress.make
 
 moveit_msgs/CMakeFiles/_moveit_msgs_generate_messages_check_deps_RobotTrajectory:
-	cd /home/zhiyuan/moveit/build/moveit_msgs && ../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genmsg/cmake/../../../lib/genmsg/genmsg_check_deps.py moveit_msgs /home/zhiyuan/moveit/src/moveit_msgs/msg/RobotTrajectory.msg trajectory_msgs/MultiDOFJointTrajectoryPoint:std_msgs/Header:geometry_msgs/Transform:geometry_msgs/Twist:trajectory_msgs/MultiDOFJointTrajectory:geometry_msgs/Vector3:geometry_msgs/Quaternion:trajectory_msgs/JointTrajectory:trajectory_msgs/JointTrajectoryPoint
+	cd /home/zhiyuan/moveit/build/moveit_msgs && ../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genmsg/cmake/../../../lib/genmsg/genmsg_check_deps.py moveit_msgs /home/zhiyuan/moveit/src/moveit_msgs/msg/RobotTrajectory.msg trajectory_msgs/JointTrajectory:trajectory_msgs/MultiDOFJointTrajectoryPoint:geometry_msgs/Transform:geometry_msgs/Vector3:geometry_msgs/Twist:trajectory_msgs/MultiDOFJointTrajectory:std_msgs/Header:trajectory_msgs/JointTrajectoryPoint:geometry_msgs/Quaternion
 
 _moveit_msgs_generate_messages_check_deps_RobotTrajectory: moveit_msgs/CMakeFiles/_moveit_msgs_generate_messages_check_deps_RobotTrajectory
 _moveit_msgs_generate_messages_check_deps_RobotTrajectory: moveit_msgs/CMakeFiles/_moveit_msgs_generate_messages_check_deps_RobotTrajectory.dir/build.make

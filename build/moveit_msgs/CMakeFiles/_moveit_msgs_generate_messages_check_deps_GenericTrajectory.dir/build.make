@@ -67,7 +67,7 @@ include moveit_msgs/CMakeFiles/_moveit_msgs_generate_messages_check_deps_Generic
 include moveit_msgs/CMakeFiles/_moveit_msgs_generate_messages_check_deps_GenericTrajectory.dir/progress.make
 
 moveit_msgs/CMakeFiles/_moveit_msgs_generate_messages_check_deps_GenericTrajectory:
-	cd /home/zhiyuan/moveit/build/moveit_msgs && ../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genmsg/cmake/../../../lib/genmsg/genmsg_check_deps.py moveit_msgs /home/zhiyuan/moveit/src/moveit_msgs/msg/GenericTrajectory.msg std_msgs/Header:moveit_msgs/CartesianTrajectoryPoint:geometry_msgs/Twist:moveit_msgs/CartesianTrajectory:geometry_msgs/Vector3:geometry_msgs/Quaternion:geometry_msgs/Pose:trajectory_msgs/JointTrajectory:moveit_msgs/CartesianPoint:geometry_msgs/Point:geometry_msgs/Accel:trajectory_msgs/JointTrajectoryPoint
+	cd /home/zhiyuan/moveit/build/moveit_msgs && ../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genmsg/cmake/../../../lib/genmsg/genmsg_check_deps.py moveit_msgs /home/zhiyuan/moveit/src/moveit_msgs/msg/GenericTrajectory.msg trajectory_msgs/JointTrajectory:geometry_msgs/Point:moveit_msgs/CartesianTrajectoryPoint:geometry_msgs/Twist:geometry_msgs/Vector3:std_msgs/Header:trajectory_msgs/JointTrajectoryPoint:moveit_msgs/CartesianPoint:moveit_msgs/CartesianTrajectory:geometry_msgs/Quaternion:geometry_msgs/Pose:geometry_msgs/Accel
 
 _moveit_msgs_generate_messages_check_deps_GenericTrajectory: moveit_msgs/CMakeFiles/_moveit_msgs_generate_messages_check_deps_GenericTrajectory
 _moveit_msgs_generate_messages_check_deps_GenericTrajectory: moveit_msgs/CMakeFiles/_moveit_msgs_generate_messages_check_deps_GenericTrajectory.dir/build.make
