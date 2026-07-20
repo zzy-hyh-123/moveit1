@@ -438,7 +438,7 @@
 	"MOC_RELAXED_MODE" : false,
 	"MOC_SKIP" : [],
 	"MULTI_CONFIG" : false,
-	"PARALLEL" : 4,
+	"PARALLEL" : 8,
 	"PARSE_CACHE_FILE" : "/home/zhiyuan/moveit/build/moveit/moveit_setup_assistant/CMakeFiles/moveit_setup_assistant_updater_autogen.dir/ParseCache.txt",
 	"QT_MOC_EXECUTABLE" : "/usr/lib/qt5/bin/moc",
 	"QT_UIC_EXECUTABLE" : "",

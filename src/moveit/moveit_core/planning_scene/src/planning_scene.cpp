@@ -490,83 +490,84 @@ void PlanningScene::checkSelfCollision(const collision_detection::CollisionReque
     checkSelfCollision(req, res, getCurrentState());
 }
 
-// void PlanningScene::checkCollision(const collision_detection::CollisionRequest& req,
-//                                    collision_detection::CollisionResult& res,
-//                                    const moveit::core::RobotState& robot_state,
-//                                    const collision_detection::AllowedCollisionMatrix& acm) const
-// {
-//   // check collision with the world using the padded version
-//   getCollisionEnv()->checkRobotCollision(req, res, robot_state, acm);
-
-//   // do self-collision checking with the unpadded version of the robot
-//   if (!res.collision || (req.contacts && res.contacts.size() < req.max_contacts))
-//     getCollisionEnvUnpadded()->checkSelfCollision(req, res, robot_state, acm);
-// }
-
 void PlanningScene::checkCollision(const collision_detection::CollisionRequest& req,
                                    collision_detection::CollisionResult& res,
                                    const moveit::core::RobotState& robot_state,
                                    const collision_detection::AllowedCollisionMatrix& acm) const
 {
-  // long env_us = 0, self_us = 0, dual_us = 0;
-  // auto env_start = std::chrono::high_resolution_clock::now();
+  // check collision with the world using the padded version
   getCollisionEnv()->checkRobotCollision(req, res, robot_state, acm);
-  // auto env_end = std::chrono::high_resolution_clock::now();
-  // env_us = std::chrono::duration_cast<std::chrono::microseconds>(env_end - env_start).count();
 
-  if (res.collision && (!req.contacts || res.contacts.size() >= req.max_contacts))
-  {
-    // long total_us = env_us;
-    // ROS_INFO_STREAM("Collision Check | Env: " << env_us << " us | Self: 0 us | Dual: 0 us | Total: " << total_us << " us | Status: COLLISION");
-    return;
-  }
-
-  // auto self_start = std::chrono::high_resolution_clock::now();
-  getCollisionEnvUnpadded()->checkSelfCollision(req, res, robot_state, acm);
-  // auto self_end = std::chrono::high_resolution_clock::now();
-  // self_us = std::chrono::duration_cast<std::chrono::microseconds>(self_end - self_start).count();
-
-  if (res.collision && (!req.contacts || res.contacts.size() >= req.max_contacts))
-  {
-    // long total_us = env_us + self_us;
-    // ROS_INFO_STREAM("Collision Check | Env: " << env_us << " us | Self: " << self_us << " us | Dual: 0 us | Total: " << total_us << " us | Status: SELF_COLLISION");
-    return;
-  }
-
-  static collision_detection::AllowedCollisionMatrix acm_arm_cross;
-  static bool acm_inited = false;
-
-  if (!acm_inited)
-  {
-    const auto& links = getRobotModel()->getLinkModelNames();
-    const std::unordered_set<std::string> base_links = {
-      "base_platform","base_vertical","platform_work","vertical_work","dummy_root","world"
-    };
-
-    acm_arm_cross = collision_detection::AllowedCollisionMatrix(links, true);
-    for (size_t i = 0; i < links.size(); ++i)
-    {
-      for (size_t j = i+1; j < links.size(); ++j)
-      {
-        const std::string& l1 = links[i];
-        const std::string& l2 = links[j];
-        bool same_arm = (l1.substr(0,5)=="arm1_"&&l2.substr(0,5)=="arm1_") || (l1.substr(0,5)=="arm2_"&&l2.substr(0,5)=="arm2_");
-        bool base_rel = base_links.count(l1) || base_links.count(l2);
-        bool cross_arm = !same_arm && !base_rel;
-        if (cross_arm)
-          acm_arm_cross.setEntry(l1, l2, false);
-      }
-    }
-    acm_inited = true;
-  }
-  // auto dual_start = std::chrono::high_resolution_clock::now();
-  getCollisionEnv()->checkSelfCollision(req, res, robot_state, acm_arm_cross);
-  // auto dual_end = std::chrono::high_resolution_clock::now();
-  // dual_us = std::chrono::duration_cast<std::chrono::microseconds>(dual_end - dual_start).count();
-
-  // long total_us = std::chrono::duration_cast<std::chrono::microseconds>(dual_end - env_start).count();
-  // ROS_INFO_STREAM_THROTTLE(0.1, "Collision Check | Env: " << env_us << " us | Self: " << self_us << " us | Dual: " << dual_us << " us | Total: " << total_us << " us | Status: " << (res.collision ? "DUAL_COLLISION" : "OK"));
+  // do self-collision checking with the unpadded version of the robot
+  if (!res.collision || (req.contacts && res.contacts.size() < req.max_contacts))
+    getCollisionEnvUnpadded()->checkSelfCollision(req, res, robot_state, acm);
 }
+
+// 修改碰撞检测
+// void PlanningScene::checkCollision(const collision_detection::CollisionRequest& req,
+//                                    collision_detection::CollisionResult& res,
+//                                    const moveit::core::RobotState& robot_state,
+//                                    const collision_detection::AllowedCollisionMatrix& acm) const
+// {
+//   // long env_us = 0, self_us = 0, dual_us = 0;
+//   // auto env_start = std::chrono::high_resolution_clock::now();
+//   getCollisionEnv()->checkRobotCollision(req, res, robot_state, acm);
+//   // auto env_end = std::chrono::high_resolution_clock::now();
+//   // env_us = std::chrono::duration_cast<std::chrono::microseconds>(env_end - env_start).count();
+
+//   if (res.collision && (!req.contacts || res.contacts.size() >= req.max_contacts))
+//   {
+//     // long total_us = env_us;
+//     // ROS_INFO_STREAM("Collision Check | Env: " << env_us << " us | Self: 0 us | Dual: 0 us | Total: " << total_us << " us | Status: COLLISION");
+//     return;
+//   }
+
+//   // auto self_start = std::chrono::high_resolution_clock::now();
+//   getCollisionEnvUnpadded()->checkSelfCollision(req, res, robot_state, acm);
+//   // auto self_end = std::chrono::high_resolution_clock::now();
+//   // self_us = std::chrono::duration_cast<std::chrono::microseconds>(self_end - self_start).count();
+
+//   if (res.collision && (!req.contacts || res.contacts.size() >= req.max_contacts))
+//   {
+//     // long total_us = env_us + self_us;
+//     // ROS_INFO_STREAM("Collision Check | Env: " << env_us << " us | Self: " << self_us << " us | Dual: 0 us | Total: " << total_us << " us | Status: SELF_COLLISION");
+//     return;
+//   }
+
+//   static collision_detection::AllowedCollisionMatrix acm_arm_cross;
+//   static bool acm_inited = false;
+
+//   if (!acm_inited)
+//   {
+//     const auto& links = getRobotModel()->getLinkModelNames();
+//     const std::unordered_set<std::string> base_links = {
+//       "base_platform","base_vertical","platform_work","vertical_work","dummy_root","world"
+//     };
+
+//     acm_arm_cross = collision_detection::AllowedCollisionMatrix(links, true);
+//     for (size_t i = 0; i < links.size(); ++i)
+//     {
+//       for (size_t j = i+1; j < links.size(); ++j)
+//       {
+//         const std::string& l1 = links[i];
+//         const std::string& l2 = links[j];
+//         bool same_arm = (l1.substr(0,5)=="arm1_"&&l2.substr(0,5)=="arm1_") || (l1.substr(0,5)=="arm2_"&&l2.substr(0,5)=="arm2_");
+//         bool base_rel = base_links.count(l1) || base_links.count(l2);
+//         bool cross_arm = !same_arm && !base_rel;
+//         if (cross_arm)
+//           acm_arm_cross.setEntry(l1, l2, false);
+//       }
+//     }
+//     acm_inited = true;
+//   }
+//   // auto dual_start = std::chrono::high_resolution_clock::now();
+//   getCollisionEnv()->checkSelfCollision(req, res, robot_state, acm_arm_cross);
+//   // auto dual_end = std::chrono::high_resolution_clock::now();
+//   // dual_us = std::chrono::duration_cast<std::chrono::microseconds>(dual_end - dual_start).count();
+
+//   // long total_us = std::chrono::duration_cast<std::chrono::microseconds>(dual_end - env_start).count();
+//   // ROS_INFO_STREAM_THROTTLE(0.1, "Collision Check | Env: " << env_us << " us | Self: " << self_us << " us | Dual: " << dual_us << " us | Total: " << total_us << " us | Status: " << (res.collision ? "DUAL_COLLISION" : "OK"));
+// }
 
 void PlanningScene::checkCollisionUnpadded(const collision_detection::CollisionRequest& req,
                                            collision_detection::CollisionResult& res)

@@ -77,6 +77,12 @@ public:
   virtual double cost(const ompl::base::State* state) const;
   double clearance(const ompl::base::State* state) const override;
 
+  /** \brief 只计算机械臂与环境障碍物之间的最小距离（忽略自碰撞）
+   *  @param state 机械臂状态
+   *  @return 机械臂连杆与世界物体之间的最近距离，
+   *          正值 = 安全距离，<= 0 = 发生碰撞 */
+  double distanceEnvironment(const ompl::base::State* state) const override;
+
   void setVerbose(bool flag);
 
 protected:

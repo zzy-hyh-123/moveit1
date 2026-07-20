@@ -156,7 +156,7 @@ foreach(library ${libraries})
     set(lib_path "")
     set(lib "${library}-NOTFOUND")
     # since the path where the library is found is returned we have to iterate over the paths manually
-    foreach(path /home/zhiyuan/moveit/install/lib;/home/zhiyuan/moveit/devel/lib;/home/zhiyuan/code/nav_ws/devel/lib;/home/zhiyuan/jaka_ws/devel/lib;/home/zhiyuan/catkin_ws/devel/lib;/home/zhiyuan/livox_ws/src/ws_livox/devel/lib;/opt/ros/noetic/lib)
+    foreach(path /home/zhiyuan/moveit/install/lib;/home/zhiyuan/moveit/devel/lib;/home/zhiyuan/code/nav_ws/devel/lib;/home/zhiyuan/catkin_ws/devel/lib;/home/zhiyuan/livox_ws/src/ws_livox/devel/lib;/opt/ros/noetic/lib)
       find_library(lib ${library}
         PATHS ${path}
         NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)

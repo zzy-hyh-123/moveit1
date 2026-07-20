@@ -176,3 +176,12 @@ double ompl_interface::StateValidityChecker::clearance(const ompl::base::State* 
   planning_context_->getPlanningScene()->checkCollision(collision_request_with_distance_, res, *robot_state);
   return res.collision ? 0.0 : (res.distance < 0.0 ? std::numeric_limits<double>::infinity() : res.distance);
 }
+
+double ompl_interface::StateValidityChecker::distanceEnvironment(const ompl::base::State* state) const
+{
+  moveit::core::RobotState* robot_state = tss_.getStateStorage();
+  planning_context_->getOMPLStateSpace()->copyToRobotState(*robot_state, state);
+
+  // 直接调用 distanceRobot()，只计算机械臂与环境障碍物的距离，忽略自碰撞
+  return planning_context_->getPlanningScene()->distanceToCollision(*robot_state);
+}
