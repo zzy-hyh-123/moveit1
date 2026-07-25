@@ -262,10 +262,11 @@ void CollisionEnvFCL::checkSelfCollisionHelper(const CollisionRequest& req, Coll
   FCLManager manager;
   allocSelfCollisionBroadPhase(state, manager);
 
-  // ====== 双臂安全距离检查（直接遍历 shape pairs，AABB 预筛 + 提前终止） ======
+  // ====== 双臂安全距离检查（在 collide 之前用干净的 broadphase tree） ======
   static double dual_arm_safety_distance = -1.0;
   static std::string arm1_group, arm2_group;
   static std::set<std::string> arm1_link_names, arm2_link_names;
+  static AllowedCollisionMatrix* inter_arm_acm = nullptr;
 
   if (dual_arm_safety_distance < 0)
   {
@@ -286,6 +287,11 @@ void CollisionEnvFCL::checkSelfCollisionHelper(const CollisionRequest& req, Coll
         for (const moveit::core::LinkModel* link : g2->getUpdatedLinkModels())
           arm2_link_names.insert(link->getName());
 
+      inter_arm_acm = new AllowedCollisionMatrix(getRobotModel()->getLinkModelNames(), true);
+      for (const auto& n1 : arm1_link_names)
+        for (const auto& n2 : arm2_link_names)
+          inter_arm_acm->setEntry(n1, n2, false);
+
       ROS_INFO_NAMED(LOGNAME, "Dual-arm safety enabled: %s(%zu links) vs %s(%zu links), min_dist=%.3fm",
                      arm1_group.c_str(), arm1_link_names.size(),
                      arm2_group.c_str(), arm2_link_names.size(),
@@ -293,101 +299,41 @@ void CollisionEnvFCL::checkSelfCollisionHelper(const CollisionRequest& req, Coll
     }
   }
 
-  if (dual_arm_safety_distance > 0 && !arm1_link_names.empty() && !arm2_link_names.empty())
+  bool dual_arm_violation = false;
+  if (dual_arm_safety_distance > 0 && inter_arm_acm)
   {
-    // 分离两臂的 FCL collision objects
-    std::vector<fcl::CollisionObjectd*> arm1_objs, arm2_objs;
-    int unknown_objs = 0;
-    for (auto& obj : manager.object_.collision_objects_)
+    DistanceRequest dreq;
+    DistanceResult dres;
+    dreq.acm = inter_arm_acm;
+    dreq.type = DistanceRequestType::GLOBAL;
+    // 在 collide 之前用干净的 broadphase tree 做 distance，避免二次 allocSelfCollisionBroadPhase
+    DistanceData drd(&dreq, &dres);
+    manager.manager_->distance(&drd, &distanceCallback);
+
+    if (dres.minimum_distance.distance < dual_arm_safety_distance)
     {
-      auto* geom_data = static_cast<const CollisionGeometryData*>(obj->collisionGeometry()->getUserData());
-      if (geom_data->type == BodyTypes::ROBOT_LINK)
-      {
-        const std::string& link_name = geom_data->getID();
-        if (arm1_link_names.count(link_name))
-          arm1_objs.push_back(obj.get());
-        else if (arm2_link_names.count(link_name))
-          arm2_objs.push_back(obj.get());
-        else
-          unknown_objs++;
-      }
-    }
+      dual_arm_violation = true;
+      res.collision = true;
 
-    ROS_DEBUG_THROTTLE_NAMED(5.0, LOGNAME,
-                             "Dual-arm check: arm1=%zu objs, arm2=%zu objs, unknown=%d, total_fcl=%zu, pairs=%zu",
-                             arm1_objs.size(), arm2_objs.size(), unknown_objs,
-                             manager.object_.collision_objects_.size(),
-                             arm1_objs.size() * arm2_objs.size());
+      Contact contact;
+      contact.body_name_1 = dres.minimum_distance.link_names[0];
+      contact.body_name_2 = dres.minimum_distance.link_names[1];
+      contact.body_type_1 = dres.minimum_distance.body_types[0];
+      contact.body_type_2 = dres.minimum_distance.body_types[1];
+      contact.depth = dual_arm_safety_distance - dres.minimum_distance.distance;
+      contact.pos = dres.minimum_distance.nearest_points[0];
+      contact.normal.setZero();
+      res.contacts[std::make_pair(contact.body_name_1, contact.body_name_2)].push_back(contact);
+      res.distance = dres.minimum_distance.distance;
 
-    if (arm1_objs.empty() || arm2_objs.empty())
-    {
-      static bool warned = false;
-      if (!warned)
-      {
-        warned = true;
-        std::string n1, n2;
-        for (const auto& n : arm1_link_names)
-          n1 += (n1.empty() ? "" : ",") + n;
-        for (const auto& n : arm2_link_names)
-          n2 += (n2.empty() ? "" : ",") + n;
-        ROS_WARN_NAMED(LOGNAME, "Dual-arm check NOT working: arm1=%zu objs, arm2=%zu objs. "
-                       "arm1 group '%s' links: [%s], arm2 group '%s' links: [%s]",
-                       arm1_objs.size(), arm2_objs.size(),
-                       arm1_group.c_str(), n1.c_str(), arm2_group.c_str(), n2.c_str());
-      }
-    }
-
-    // 遍历跨臂 shape pair，AABB 预筛 + 窄阶段提前终止
-    bool dual_arm_violation = false;
-    for (auto* o1 : arm1_objs)
-    {
-      for (auto* o2 : arm2_objs)
-      {
-        // AABB 快速预筛
-        double aabb_dist = o1->getAABB().distance(o2->getAABB());
-        if (aabb_dist > dual_arm_safety_distance)
-          continue;
-
-        // 窄阶段距离计算
-        fcl::DistanceResultd fcl_dist_result;
-        fcl_dist_result.min_distance = dual_arm_safety_distance;
-        double dist = fcl::distance(o1, o2, fcl::DistanceRequestd(true), fcl_dist_result);
-        if (dist < dual_arm_safety_distance)
-        {
-          dual_arm_violation = true;
-
-          auto* cd1 = static_cast<const CollisionGeometryData*>(o1->collisionGeometry()->getUserData());
-          auto* cd2 = static_cast<const CollisionGeometryData*>(o2->collisionGeometry()->getUserData());
-
-          Contact contact;
-          contact.body_name_1 = cd1->getID();
-          contact.body_name_2 = cd2->getID();
-          contact.body_type_1 = cd1->type;
-          contact.body_type_2 = cd2->type;
-          contact.depth = dual_arm_safety_distance - dist;
-#if (MOVEIT_FCL_VERSION >= FCL_VERSION_CHECK(0, 6, 0))
-          contact.pos = fcl_dist_result.nearest_points[0];
-#else
-          contact.pos = Eigen::Map<const Eigen::Vector3d>(fcl_dist_result.nearest_points[0].data.vs);
-#endif
-          contact.normal.setZero();
-          res.contacts[std::make_pair(contact.body_name_1, contact.body_name_2)].push_back(contact);
-          res.distance = dist;
-          res.collision = true;
-
-          ROS_DEBUG_NAMED(LOGNAME, "Dual-arm violation: %s <-> %s, dist=%.4f < safety=%.4f",
-                          contact.body_name_1.c_str(), contact.body_name_2.c_str(),
-                          dist, dual_arm_safety_distance);
-          break;
-        }
-      }
-      if (dual_arm_violation)
-        break;
+      ROS_DEBUG_NAMED(LOGNAME, "Dual-arm violation: %s <-> %s, dist=%.4f < safety=%.4f",
+                      contact.body_name_1.c_str(), contact.body_name_2.c_str(),
+                      dres.minimum_distance.distance, dual_arm_safety_distance);
     }
   }
 
   // 正常自碰撞检测
-  if (!res.collision)
+  if (!dual_arm_violation)
   {
     CollisionData cd(&req, &res, acm);
     cd.enableGroup(getRobotModel());

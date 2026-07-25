@@ -1,0 +1,3 @@
+1.补充distanceEnvironment函数计算机械臂与环境障碍物之间的距离，不考虑机械臂自身连杆距离。
+
+2.修改双臂连杆之间带安全距离的碰撞检测函数checkSelfCollisionHelper，补充安全距离dual_arm_safety_distance,问题：计算量增加规划算法耗时增加50倍

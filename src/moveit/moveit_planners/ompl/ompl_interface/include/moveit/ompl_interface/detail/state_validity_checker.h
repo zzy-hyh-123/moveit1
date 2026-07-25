@@ -38,6 +38,7 @@
 
 #include <moveit/ompl_interface/detail/threadsafe_state_storage.h>
 #include <moveit/collision_detection/collision_common.h>
+#include <moveit/robot_model/robot_model.h>
 #include <ompl/base/StateValidityChecker.h>
 
 namespace ompl_interface
@@ -77,15 +78,23 @@ public:
   virtual double cost(const ompl::base::State* state) const;
   double clearance(const ompl::base::State* state) const override;
 
-  /** \brief 只计算机械臂与环境障碍物之间的最小距离（忽略自碰撞）
+  /** \brief 只计算机械臂运动连杆与环境障碍物的最小距离（排除固定底座，忽略自碰撞）
    *  @param state 机械臂状态
-   *  @return 机械臂连杆与世界物体之间的最近距离，
-   *          正值 = 安全距离，<= 0 = 发生碰撞 */
-  double distanceEnvironment(const ompl::base::State* state) const override;
+   *  @return 机械臂运动连杆与世界物体之间的最近距离 */
+  double distanceEnvironment(const ompl::base::State* state) const;
 
   void setVerbose(bool flag);
 
 protected:
+  /** \brief 初始化运动连杆集合（排除固定于世界的连杆） */
+  void initMovingLinks();
+
+  /** \brief 判断连杆是否固定于世界（所有祖先关节都是 FIXED） */
+  bool isLinkFixedToWorld(const moveit::core::LinkModel* link) const;
+
+  /** \brief 计算本臂运动连杆与环境障碍物的最小距离 */
+  double computeRobotWorldDistance(const moveit::core::RobotState& state) const;
+
   const ModelBasedPlanningContext* planning_context_;
   std::string group_name_;
   TSStateStorage tss_;
@@ -96,5 +105,8 @@ protected:
 
   collision_detection::CollisionRequest collision_request_with_cost_;
   bool verbose_;
+
+  /// 本组运动连杆集合（排除固定底座） */
+  std::set<const moveit::core::LinkModel*> moving_link_set_;
 };
 }  // namespace ompl_interface

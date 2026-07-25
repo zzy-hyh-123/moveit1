@@ -408,7 +408,7 @@ struct FCLShapeCache
   unsigned int clean_count_;
 };
 
-bool distanceCallback(fcl::CollisionObjectd* o1, fcl::CollisionObjectd* o2, void* data, double& /*min_dist*/)
+bool distanceCallback(fcl::CollisionObjectd* o1, fcl::CollisionObjectd* o2, void* data, double& min_dist)
 {
   DistanceData* cdata = reinterpret_cast<DistanceData*>(data);
 
@@ -623,6 +623,7 @@ bool distanceCallback(fcl::CollisionObjectd* o1, fcl::CollisionObjectd* o2, void
     if (dist_result.distance < cdata->res->minimum_distance.distance)
     {
       cdata->res->minimum_distance = dist_result;
+      min_dist = dist_result.distance;  // 更新 min_dist 让 FCL broadphase 做空间剪枝
     }
 
     if (dist_result.distance <= 0)

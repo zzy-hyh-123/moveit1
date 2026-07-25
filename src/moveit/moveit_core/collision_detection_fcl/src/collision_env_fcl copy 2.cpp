@@ -297,43 +297,16 @@ void CollisionEnvFCL::checkSelfCollisionHelper(const CollisionRequest& req, Coll
   {
     // 分离两臂的 FCL collision objects
     std::vector<fcl::CollisionObjectd*> arm1_objs, arm2_objs;
-    int unknown_objs = 0;
     for (auto& obj : manager.object_.collision_objects_)
     {
       auto* geom_data = static_cast<const CollisionGeometryData*>(obj->collisionGeometry()->getUserData());
-      if (geom_data->type == BodyTypes::ROBOT_LINK)
+      if (geom_data->type == BodyTypes::ROBOT_LINK || geom_data->type == BodyTypes::ROBOT_ATTACHED)
       {
         const std::string& link_name = geom_data->getID();
         if (arm1_link_names.count(link_name))
           arm1_objs.push_back(obj.get());
         else if (arm2_link_names.count(link_name))
           arm2_objs.push_back(obj.get());
-        else
-          unknown_objs++;
-      }
-    }
-
-    ROS_DEBUG_THROTTLE_NAMED(5.0, LOGNAME,
-                             "Dual-arm check: arm1=%zu objs, arm2=%zu objs, unknown=%d, total_fcl=%zu, pairs=%zu",
-                             arm1_objs.size(), arm2_objs.size(), unknown_objs,
-                             manager.object_.collision_objects_.size(),
-                             arm1_objs.size() * arm2_objs.size());
-
-    if (arm1_objs.empty() || arm2_objs.empty())
-    {
-      static bool warned = false;
-      if (!warned)
-      {
-        warned = true;
-        std::string n1, n2;
-        for (const auto& n : arm1_link_names)
-          n1 += (n1.empty() ? "" : ",") + n;
-        for (const auto& n : arm2_link_names)
-          n2 += (n2.empty() ? "" : ",") + n;
-        ROS_WARN_NAMED(LOGNAME, "Dual-arm check NOT working: arm1=%zu objs, arm2=%zu objs. "
-                       "arm1 group '%s' links: [%s], arm2 group '%s' links: [%s]",
-                       arm1_objs.size(), arm2_objs.size(),
-                       arm1_group.c_str(), n1.c_str(), arm2_group.c_str(), n2.c_str());
       }
     }
 
