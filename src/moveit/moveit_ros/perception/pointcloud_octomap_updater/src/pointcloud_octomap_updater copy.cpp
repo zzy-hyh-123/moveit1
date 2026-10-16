@@ -308,55 +308,29 @@ void PointCloudOctomapUpdater::cloudMsgCallback(const sensor_msgs::PointCloud2::
     free_cells.erase(occupied_cell);
 
 
-  // tree_->lockWrite();
-  // try
-  // {
-  //   /* mark free cells only if not seen occupied in this cloud */
-  //   for (const octomap::OcTreeKey& free_cell : free_cells)
-  //     tree_->updateNode(free_cell, false);
-
-  //   /* now mark all occupied cells */
-  //   for (const octomap::OcTreeKey& occupied_cell : occupied_cells)
-  //     tree_->updateNode(occupied_cell, true);
-
-  //   // set the logodds to the minimum for the cells that are part of the model
-  //   const float lg = tree_->getClampingThresMinLog() - tree_->getClampingThresMaxLog();
-  //   for (const octomap::OcTreeKey& model_cell : model_cells)
-  //     tree_->updateNode(model_cell, lg);
-  // }
-  // catch (...)
-  // {
-  //   ROS_ERROR_NAMED(LOGNAME, "Internal error while updating octree");
-  // }
-  // tree_->unlockWrite();
-  // ROS_DEBUG_NAMED(LOGNAME, "Processed point cloud in %lf ms", (ros::WallTime::now() - start).toSec() * 1000.0);
-  // tree_->triggerUpdateCallback();
-
-  if (ns_ == "global")
+  tree_->lockWrite();
+  try
   {
-    tree_->lockWrite();
-    try
-    {
-      // 清空当前帧射线区域
-      for (const auto& free_cell : free_cells)
-        tree_->updateNode(free_cell, false);
+    /* mark free cells only if not seen occupied in this cloud */
+    for (const octomap::OcTreeKey& free_cell : free_cells)
+      tree_->updateNode(free_cell, false);
 
-      // 添加当前帧障碍
-      for (const auto& occupied_cell : occupied_cells)
-        tree_->updateNode(occupied_cell, true);
+    /* now mark all occupied cells */
+    for (const octomap::OcTreeKey& occupied_cell : occupied_cells)
+      tree_->updateNode(occupied_cell, true);
 
-      // 机械臂自身区域设为安全
-      float lg = tree_->getClampingThresMinLog() - tree_->getClampingThresMaxLog();
-      for (const auto& model_cell : model_cells)
-        tree_->updateNode(model_cell, lg);
-    }
-    catch (...) {
-      ROS_ERROR("Update error");
-    }
-    tree_->unlockWrite();
-    ROS_DEBUG_NAMED(LOGNAME, "Processed point cloud in %lf ms", (ros::WallTime::now() - start).toSec() * 1000.0);
-    tree_->triggerUpdateCallback();
+    // set the logodds to the minimum for the cells that are part of the model
+    const float lg = tree_->getClampingThresMinLog() - tree_->getClampingThresMaxLog();
+    for (const octomap::OcTreeKey& model_cell : model_cells)
+      tree_->updateNode(model_cell, lg);
   }
+  catch (...)
+  {
+    ROS_ERROR_NAMED(LOGNAME, "Internal error while updating octree");
+  }
+  tree_->unlockWrite();
+  ROS_DEBUG_NAMED(LOGNAME, "Processed point cloud in %lf ms", (ros::WallTime::now() - start).toSec() * 1000.0);
+  tree_->triggerUpdateCallback();
 
   if (filtered_cloud)
   {

@@ -151,7 +151,9 @@ void PointCloudOctomapUpdater::updateMask(const sensor_msgs::PointCloud2& /*clou
 
 void PointCloudOctomapUpdater::cloudMsgCallback(const sensor_msgs::PointCloud2::ConstPtr& cloud_msg)
 {
-  ROS_DEBUG_NAMED(LOGNAME, "Received a new point cloud message");
+  ROS_INFO_NAMED(LOGNAME, "[%s] cloudMsgCallback: ns_='%s', topic=%s, window_size=%zu, all_local=%zu, global_locked=%zu",
+                 ros::this_node::getName().c_str(), ns_.c_str(), point_cloud_topic_.c_str(),
+                 point_cloud_window_.size(), all_local_cells_.size(), global_locked_cells_.size());
   ros::WallTime start = ros::WallTime::now();
 
   if (max_update_rate_ > 0)
@@ -454,6 +456,9 @@ void PointCloudOctomapUpdater::cloudMsgCallback(const sensor_msgs::PointCloud2::
         tree_->setNodeValue(key, tree_->getClampingThresMinLog());
         all_local_cells_.erase(key);
       }
+      ROS_INFO_NAMED(LOGNAME, "[%s] Local update: occupied=%zu, cleared=%zu, remaining_local=%zu, window_frames=%zu",
+                     ns_.c_str(), all_occupied_cells.size(), cells_to_clear.size(),
+                     all_local_cells_.size(), point_cloud_window_.size());
 
       // 添加当前窗口的所有体素
       for (const octomap::OcTreeKey& occupied_cell : all_occupied_cells)

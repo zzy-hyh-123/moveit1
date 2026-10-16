@@ -75,6 +75,7 @@
 #include <ompl/geometric/planners/informedtrees/AITstar.h>
 #include <ompl/geometric/planners/informedtrees/ABITstar.h>
 #include <ompl/geometric/planners/informedtrees/BITstar.h>
+#include <ompl/geometric/planners/rrt/AORRTC.h>
 
 #include <moveit/ompl_interface/parameterization/joint_space/joint_model_state_space_factory.h>
 #include <moveit/ompl_interface/parameterization/joint_space/joint_model_state_space.h>
@@ -302,6 +303,7 @@ void ompl_interface::PlanningContextManager::registerDefaultPlanners()
   registerPlannerAllocatorHelper<og::AITstar>("geometric::AITstar");
   registerPlannerAllocatorHelper<og::ABITstar>("geometric::ABITstar");
   registerPlannerAllocatorHelper<og::BITstar>("geometric::BITstar");
+  registerPlannerAllocatorHelper<og::AORRTC>("geometric::AORRTC");
 }
 
 void ompl_interface::PlanningContextManager::registerDefaultStateSpaces()
