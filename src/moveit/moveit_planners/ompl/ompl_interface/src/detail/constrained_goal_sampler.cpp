@@ -161,7 +161,26 @@ bool ompl_interface::ConstrainedGoalSampler::sampleUsingConstraintSampler(const 
         if (kinematic_constraint_set_->decide(work_state_, verbose).satisfied)
           return true;
       }
+      else
+      {
+        /* Remember the rejected candidate: if sampling eventually gives up, this is the state whose
+           collision pairs get reported. */
+        planning_context_->getOMPLStateSpace()->copyToRobotState(work_state_, new_goal);
+      }
     }
+  }
+
+  /* Returning false stops the goal sampling thread. If it is still sampling at this point, the goal
+     region produced no valid state and planning is about to fail; report why the last candidate was
+     rejected instead of only logging "Insufficient states in sampleable goal region". Nothing is
+     printed while sampling is succeeding, so a successful plan stays silent. */
+  if (gls->isSampling())
+  {
+    if (!constraint_sampler_)
+      planning_context_->getOMPLStateSpace()->copyToRobotState(work_state_, new_goal);
+    auto* checker = static_cast<StateValidityChecker*>(si_->getStateValidityChecker().get());
+    if (checker)
+      checker->logCollisionContacts(work_state_, "Goal sampling failed, planning has no valid goal");
   }
   return false;
 }

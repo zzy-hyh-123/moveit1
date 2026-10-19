@@ -85,6 +85,11 @@ public:
 
   void setVerbose(bool flag);
 
+  /** \brief 打印给定机器人状态中最深的碰撞连杆对，供规划失败诊断使用。
+   *  @param robot_state 要检查的完整机器人状态
+   *  @param reason 日志前缀，说明调用场景 */
+  void logCollisionContacts(moveit::core::RobotState& robot_state, const char* reason = "Collision") const;
+
 protected:
   /** \brief 初始化运动连杆集合（排除固定于世界的连杆） */
   void initMovingLinks();
@@ -94,9 +99,6 @@ protected:
 
   /** \brief 计算本臂运动连杆与环境障碍物的最小距离 */
   double computeRobotWorldDistance(const moveit::core::RobotState& state) const;
-
-  /** \brief 状态碰撞无效时，用 contacts 再查一次并限流打印具体碰撞连杆对 */
-  void logCollisionContacts(moveit::core::RobotState& robot_state) const;
 
   const ModelBasedPlanningContext* planning_context_;
   std::string group_name_;

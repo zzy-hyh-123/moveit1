@@ -1,6 +1,5 @@
 
 #include <algorithm>
-#include <atomic>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -14,14 +13,6 @@
 namespace ompl_interface
 {
 constexpr char LOGNAME[] = "state_validity_checker";
-
-namespace
-{
-/* 每个被拒绝的状态都补一次 contacts 查询会明显拖慢规划：目标区域不可达时，采样器会在毫秒内
-   连续拒绝成百上千个状态。因此诊断查询和日志都限流，所有线程共用同一个时间戳。 */
-constexpr double kContactReportInterval = 2.0;
-std::atomic<double> last_contact_report{ 0.0 };
-}  // namespace
 }  // namespace ompl_interface
 
 ompl_interface::StateValidityChecker::StateValidityChecker(const ModelBasedPlanningContext* pc)
@@ -101,7 +92,6 @@ bool ompl_interface::StateValidityChecker::isValid(const ompl::base::State* stat
   else
   {
     const_cast<ob::State*>(state)->as<ModelBasedStateSpace::StateType>()->markInvalid();
-    logCollisionContacts(*robot_state);
   }
   return !res.collision;
 }
@@ -152,8 +142,6 @@ bool ompl_interface::StateValidityChecker::isValid(const ompl::base::State* stat
   planning_context_->getPlanningScene()->checkCollision(
       verbose ? collision_request_with_distance_verbose_ : collision_request_with_distance_, res, *robot_state);
   dist = res.distance;
-  if (res.collision)
-    logCollisionContacts(*robot_state);
   return !res.collision;
 
   // 0.01m安全距离判断
@@ -170,15 +158,9 @@ bool ompl_interface::StateValidityChecker::isValid(const ompl::base::State* stat
 }
 
 
-void ompl_interface::StateValidityChecker::logCollisionContacts(moveit::core::RobotState& robot_state) const
+void ompl_interface::StateValidityChecker::logCollisionContacts(moveit::core::RobotState& robot_state,
+                                                               const char* reason) const
 {
-  /* 限流放在查询之前：日志不打的时候连 contacts 查询也不做，正常规划几乎没有额外开销。 */
-  const double now = ros::WallTime::now().toSec();
-  double last = last_contact_report.load(std::memory_order_relaxed);
-  if (now - last < kContactReportInterval ||
-      !last_contact_report.compare_exchange_strong(last, now, std::memory_order_relaxed))
-    return;
-
   collision_detection::CollisionRequest req;
   req.group_name = group_name_;
   req.contacts = true;
@@ -187,6 +169,13 @@ void ompl_interface::StateValidityChecker::logCollisionContacts(moveit::core::Ro
 
   collision_detection::CollisionResult res;
   planning_context_->getPlanningScene()->checkCollision(req, res, robot_state);
+
+  if (!res.collision)
+  {
+    ROS_WARN_NAMED(LOGNAME, "%s (group '%s'): the last sampled state is collision-free", reason,
+                   group_name_.c_str());
+    return;
+  }
 
   std::vector<const collision_detection::Contact*> contacts;
   for (const auto& entry : res.contacts)
@@ -209,7 +198,7 @@ void ompl_interface::StateValidityChecker::logCollisionContacts(moveit::core::Ro
   if (text.empty())
     text = "no contact details reported";
 
-  ROS_WARN_NAMED(LOGNAME, "Collision in group '%s': %s", group_name_.c_str(), text.c_str());
+  ROS_WARN_NAMED(LOGNAME, "%s (group '%s'): %s", reason, group_name_.c_str(), text.c_str());
 }
 
 double ompl_interface::StateValidityChecker::cost(const ompl::base::State* state) const
