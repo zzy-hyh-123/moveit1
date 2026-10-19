@@ -95,6 +95,9 @@ protected:
   /** \brief 计算本臂运动连杆与环境障碍物的最小距离 */
   double computeRobotWorldDistance(const moveit::core::RobotState& state) const;
 
+  /** \brief 状态碰撞无效时，用 contacts 再查一次并限流打印具体碰撞连杆对 */
+  void logCollisionContacts(moveit::core::RobotState& robot_state) const;
+
   const ModelBasedPlanningContext* planning_context_;
   std::string group_name_;
   TSStateStorage tss_;
